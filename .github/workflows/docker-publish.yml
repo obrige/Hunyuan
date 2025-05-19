@@ -13,7 +13,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0 
+        fetch-depth: 0  
       name: 检出代码并获取完整历史记录
 
     - name: 列出当前目录文件以调试
@@ -26,8 +26,8 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: '1.22'
-        cache: true  
-        cache-dependency-path: 'go.sum' 
+        cache: true 
+        cache-dependency-path: 'go.sum'  
 
     - name: 检查并初始化Go模块
       run: |
@@ -35,18 +35,21 @@ jobs:
           echo "GO_MODULE_EXISTS=true" >> $GITHUB_ENV
         else
           echo "go.mod file not found, initializing a new Go module..."
-          # 使用仓库名称作为模块名（可根据需求调整）
           MODULE_NAME="github.com/${{ github.repository }}"
           go mod init "$MODULE_NAME"
           echo "GO_MODULE_EXISTS=true" >> $GITHUB_ENV
         fi
 
+    - name: 生成go.sum文件（如果有依赖）
+      if: env.GO_MODULE_EXISTS == 'true'
+      run: |
+        # 运行go mod tidy以生成go.sum文件（如果项目有依赖项）
+        go mod tidy || echo "Warning: go mod tidy failed, continuing build..."
+        ls -la  # 调试：查看是否生成了go.sum
+
     - name: 运行Go测试
       if: env.GO_MODULE_EXISTS == 'true'
       run: |
-        if [ -f "go.sum" ] || [ -d "vendor" ]; then
-          go mod tidy
-        fi
         go test ./... -v || echo "Warning: Go tests failed or no test files found, continuing build..."
 
     - name: 检查是否存在Dockerfile文件
