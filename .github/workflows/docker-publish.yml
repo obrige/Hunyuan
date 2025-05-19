@@ -16,7 +16,7 @@ jobs:
         fetch-depth: 0  
       name: 检出代码并获取完整历史记录
 
-    - name: 列出当前目录文件以调试 (检出后)
+    - name: 调试：检出后列出文件
       run: |
         ls -la
         find . -name "go.mod" -type f
@@ -29,7 +29,7 @@ jobs:
         cache: true  
         cache-dependency-path: 'go.sum' 
 
-    - name: 强制初始化Go模块并生成go.sum
+    - name: 初始化Go模块并生成go.sum
       run: |
         echo "Ensuring go.mod and go.sum files exist..."
         MODULE_NAME="github.com/${{ github.repository }}"
@@ -39,20 +39,19 @@ jobs:
         else
           echo "go.mod already exists."
         fi
-        go mod tidy || echo "Warning: go mod tidy failed or no dependencies, continuing build..."
+        go mod tidy 
         ls -la  
 
-    - name: 列出当前目录文件以调试 (go mod后)
+    - name: 调试：go mod后列出文件
       run: |
         ls -la
         find . -name "go.mod" -type f
         find . -name "go.sum" -type f 
 
     - name: 运行Go测试
-      run: |
-        go test ./... -v || echo "Warning: Go tests failed or no test files found, continuing build..."
+      run: go test ./... -v
 
-    - name: 检查是否存在Dockerfile文件
+    - name: 检查Dockerfile文件是否存在
       run: |
         if [ -f "Dockerfile" ]; then
           echo "DOCKERFILE_EXISTS=true" >> $GITHUB_ENV
@@ -61,17 +60,17 @@ jobs:
           exit 1
         fi
 
-    - name: 设置Docker Buildx以支持多平台构建
+    - name: 设置Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: 如果需要推送则登录Docker Hub
+    - name: 登录Docker Hub
       if: github.event_name == 'push' && env.DOCKERFILE_EXISTS == 'true'
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: 如果需要推送则登录GitHub Container Registry
+    - name: 登录GitHub Container Registry
       if: github.event_name == 'push' && env.DOCKERFILE_EXISTS == 'true'
       uses: docker/login-action@v3
       with:
@@ -79,45 +78,54 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: 构建Docker镜像并添加时间戳和Git SHA标签 (使用Docker Hub用户名)
+    - name: 构建Docker镜像并添加标签
       if: env.DOCKERFILE_EXISTS == 'true'
       run: |
         TIMESTAMP=$(date +%s)
         DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
-        IMAGE_NAME="${{ github.repository }}"
-        docker build . --file Dockerfile --tag $IMAGE_NAME:$TIMESTAMP --tag $IMAGE_NAME:${{ github.sha }}
+        IMAGE_NAME="$DOCKERHUB_USERNAME/${{ github.event.repository.name }}"
+        echo "BUILD_TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV # Store timestamp for later use
+        docker build . --file Dockerfile --tag $IMAGE_NAME:$TIMESTAMP --tag $IMAGE_NAME:${{ github.sha }} --tag $IMAGE_NAME:latest
 
     - name: 推送Docker镜像到Docker Hub
       if: github.event_name == 'push' && env.DOCKERFILE_EXISTS == 'true'
       run: |
         DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
-        IMAGE_NAME="$DOCKERHUB_USERNAME/my-image-name"
+        IMAGE_NAME="$DOCKERHUB_USERNAME/${{ github.event.repository.name }}"
         docker push $IMAGE_NAME:${{ github.sha }}
-        docker push $IMAGE_NAME:$(date +%s)
+        docker push $IMAGE_NAME:${{ env.BUILD_TIMESTAMP }} # Use stored timestamp
+        docker push $IMAGE_NAME:latest
 
     - name: 推送Docker镜像到GitHub Container Registry
       if: github.event_name == 'push' && env.DOCKERFILE_EXISTS == 'true'
       run: |
         OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-        GHCR_IMAGE=ghcr.io/$OWNER/my-image-name
-        TIMESTAMP=$(date +%s)
-        docker tag ${{ secrets.DOCKERHUB_USERNAME }}/my-image-name:${{ github.sha }} $GHCR_IMAGE:${{ github.sha }}
-        docker tag ${{ secrets.DOCKERHUB_USERNAME }}/my-image-name:$(date +%s) $GHCR_IMAGE:$TIMESTAMP
+        GHCR_IMAGE=ghcr.io/$OWNER/${{ github.event.repository.name }}
+        DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
+        DOCKERHUB_IMAGE="$DOCKERHUB_USERNAME/${{ github.event.repository.name }}"
+        
+        docker tag $DOCKERHUB_IMAGE:${{ github.sha }} $GHCR_IMAGE:${{ github.sha }}
+        docker tag $DOCKERHUB_IMAGE:${{ env.BUILD_TIMESTAMP }} $GHCR_IMAGE:${{ env.BUILD_TIMESTAMP }} # Use stored timestamp
+        docker tag $DOCKERHUB_IMAGE:latest $GHCR_IMAGE:latest
+        
         docker push $GHCR_IMAGE:${{ github.sha }}
-        docker push $GHCR_IMAGE:$TIMESTAMP
+        docker push $GHCR_IMAGE:${{ env.BUILD_TIMESTAMP }} # Use stored timestamp
+        docker push $GHCR_IMAGE:latest
 
     - name: 测试Docker镜像功能
       if: env.DOCKERFILE_EXISTS == 'true'
       run: |
         DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
-        IMAGE_NAME="$DOCKERHUB_USERNAME/my-image-name"
+        IMAGE_NAME="$DOCKERHUB_USERNAME/${{ github.event.repository.name }}"
         docker run --rm $IMAGE_NAME:${{ github.sha }} echo "Docker image test passed"
 
-    - name: 清理本地Docker镜像以释放空间
+    - name: 清理本地Docker镜像
       if: always()
       run: |
         DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
-        IMAGE_NAME="$DOCKERHUB_USERNAME/my-image-name"
-        docker rmi -f $(docker images -q $IMAGE_NAME*) 2>/dev/null || true
+        IMAGE_NAME="$DOCKERHUB_USERNAME/${{ github.event.repository.name }}"
         OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-        docker rmi -f $(docker images -q ghcr.io/$OWNER/my-image-name*) 2>/dev/null || true
+        GHCR_IMAGE=ghcr.io/$OWNER/${{ github.event.repository.name }}
+
+        docker rmi -f $(docker images -q $IMAGE_NAME*) 2>/dev/null || true
+        docker rmi -f $(docker images -q $GHCR_IMAGE*) 2>/dev/null || true
