@@ -1,0 +1,13 @@
+go.sum
+go.mod
+vendor/
+myapp
+.git
+.gitignore
+Dockerfile
+.dockerignore
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
