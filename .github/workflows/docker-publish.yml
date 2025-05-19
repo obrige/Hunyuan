@@ -13,7 +13,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0  
+        fetch-depth: 0  # 获取完整Git历史记录，等同于--depth=0
       name: 检出代码并获取完整历史记录
 
     - name: 列出当前目录文件以调试 (检出后)
@@ -26,12 +26,14 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: '1.22'
-        cache: true  
-        cache-dependency-path: 'go.sum'  
+        cache: true  # 启用缓存，如果项目没有go.sum文件则此选项无效
+        cache-dependency-path: 'go.sum'  # 指定缓存依赖文件路径，限制在根目录
 
+    # 新增步骤：强制初始化Go模块并生成go.sum
     - name: 强制初始化Go模块并生成go.sum
       run: |
         echo "Ensuring go.mod and go.sum files exist..."
+        # 使用仓库名称作为模块名（可根据需求调整）
         MODULE_NAME="github.com/${{ github.repository }}"
         # 如果go.mod不存在，初始化模块
         if [ ! -f "go.mod" ]; then
@@ -40,8 +42,9 @@ jobs:
         else
           echo "go.mod already exists."
         fi
+        # 运行go mod tidy以生成go.sum文件（如果项目有依赖项）
         go mod tidy || echo "Warning: go mod tidy failed or no dependencies, continuing build..."
-        ls -la  
+        ls -la  # 调试：查看是否生成了go.sum
 
     - name: 列出当前目录文件以调试 (go mod后)
       run: |
@@ -50,6 +53,7 @@ jobs:
         find . -name "go.sum" -type f # 额外检查go.sum
 
     - name: 运行Go测试
+      # 在go mod tidy之后运行测试
       run: |
         go test ./... -v || echo "Warning: Go tests failed or no test files found, continuing build..."
 
@@ -66,6 +70,7 @@ jobs:
       if: env.DOCKERFILE_EXISTS == 'true'
       run: |
         TIMESTAMP=$(date +%s)
+        # 明确指定构建上下文为当前目录
         docker build . --file Dockerfile --tag my-image-name:$TIMESTAMP --tag my-image-name:${{ github.sha }}
 
     - name: 如果需要推送则登录Docker Hub
@@ -92,6 +97,7 @@ jobs:
     - name: 推送Docker镜像到GitHub Container Registry
       if: github.event_name == 'push' && env.DOCKERFILE_EXISTS == 'true'
       run: |
+        # 使用shell命令将repository_owner转为小写
         OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
         GHCR_IMAGE=ghcr.io/$OWNER/my-image-name
         TIMESTAMP=$(date +%s)
