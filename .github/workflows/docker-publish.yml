@@ -21,9 +21,18 @@ jobs:
       with:
         go-version: '1.22'
         cache: true  
-        cache-dependency-path: '**/go.sum'  
+        cache-dependency-path: 'go.sum'  
+
+    - name: 检查是否存在go.mod文件
+      run: |
+        if [ -f "go.mod" ]; then
+          echo "GO_MODULE_EXISTS=true" >> $GITHUB_ENV
+        else
+          echo "GO_MODULE_EXISTS=false" >> $GITHUB_ENV
+        fi
 
     - name: 运行Go测试
+      if: env.GO_MODULE_EXISTS == 'true'
       run: |
         go test ./... -v
 
@@ -59,7 +68,6 @@ jobs:
     - name: 推送Docker镜像到GitHub Container Registry
       if: github.event_name == 'push'
       run: |
-        # 使用shell命令将repository_owner转为小写
         OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
         GHCR_IMAGE=ghcr.io/$OWNER/my-image-name
         TIMESTAMP=$(date +%s)
@@ -76,6 +84,5 @@ jobs:
       if: always()
       run: |
         docker rmi -f $(docker images -q my-image-name*) 2>/dev/null || true
-        # 使用shell命令将repository_owner转为小写以匹配镜像名称
         OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
         docker rmi -f $(docker images -q ghcr.io/$OWNER/my-image-name*) 2>/dev/null || true
