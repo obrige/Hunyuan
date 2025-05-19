@@ -83,49 +83,49 @@ jobs:
       run: |
         TIMESTAMP=$(date +%s)
         DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
-        IMAGE_NAME="$DOCKERHUB_USERNAME/${{ github.event.repository.name }}"
-        echo "BUILD_TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV # Store timestamp for later use
+        REPO_NAME_LOWERCASE=$(echo "${{ github.event.repository.name }}" | tr '[:upper:]' '[:lower:]')
+        IMAGE_NAME="$DOCKERHUB_USERNAME/$REPO_NAME_LOWERCASE"
+        echo "BUILD_TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+        echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
         docker build . --file Dockerfile --tag $IMAGE_NAME:$TIMESTAMP --tag $IMAGE_NAME:${{ github.sha }} --tag $IMAGE_NAME:latest
 
     - name: 推送Docker镜像到Docker Hub
       if: github.event_name == 'push' && env.DOCKERFILE_EXISTS == 'true'
       run: |
-        DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
-        IMAGE_NAME="$DOCKERHUB_USERNAME/${{ github.event.repository.name }}"
+        IMAGE_NAME="${{ env.IMAGE_NAME }}"
         docker push $IMAGE_NAME:${{ github.sha }}
-        docker push $IMAGE_NAME:${{ env.BUILD_TIMESTAMP }} # Use stored timestamp
+        docker push $IMAGE_NAME:${{ env.BUILD_TIMESTAMP }}
         docker push $IMAGE_NAME:latest
 
     - name: 推送Docker镜像到GitHub Container Registry
       if: github.event_name == 'push' && env.DOCKERFILE_EXISTS == 'true'
       run: |
         OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-        GHCR_IMAGE=ghcr.io/$OWNER/${{ github.event.repository.name }}
-        DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
-        DOCKERHUB_IMAGE="$DOCKERHUB_USERNAME/${{ github.event.repository.name }}"
+        REPO_NAME_LOWERCASE=$(echo "${{ github.event.repository.name }}" | tr '[:upper:]' '[:lower:]')
+        GHCR_IMAGE=ghcr.io/$OWNER/$REPO_NAME_LOWERCASE
+        DOCKERHUB_IMAGE="${{ env.IMAGE_NAME }}"
         
         docker tag $DOCKERHUB_IMAGE:${{ github.sha }} $GHCR_IMAGE:${{ github.sha }}
-        docker tag $DOCKERHUB_IMAGE:${{ env.BUILD_TIMESTAMP }} $GHCR_IMAGE:${{ env.BUILD_TIMESTAMP }} # Use stored timestamp
+        docker tag $DOCKERHUB_IMAGE:${{ env.BUILD_TIMESTAMP }} $GHCR_IMAGE:${{ env.BUILD_TIMESTAMP }}
         docker tag $DOCKERHUB_IMAGE:latest $GHCR_IMAGE:latest
         
         docker push $GHCR_IMAGE:${{ github.sha }}
-        docker push $GHCR_IMAGE:${{ env.BUILD_TIMESTAMP }} # Use stored timestamp
+        docker push $GHCR_IMAGE:${{ env.BUILD_TIMESTAMP }}
         docker push $GHCR_IMAGE:latest
 
     - name: 测试Docker镜像功能
       if: env.DOCKERFILE_EXISTS == 'true'
       run: |
-        DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
-        IMAGE_NAME="$DOCKERHUB_USERNAME/${{ github.event.repository.name }}"
+        IMAGE_NAME="${{ env.IMAGE_NAME }}"
         docker run --rm $IMAGE_NAME:${{ github.sha }} echo "Docker image test passed"
 
     - name: 清理本地Docker镜像
       if: always()
       run: |
-        DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
-        IMAGE_NAME="$DOCKERHUB_USERNAME/${{ github.event.repository.name }}"
+        IMAGE_NAME="${{ env.IMAGE_NAME }}"
         OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-        GHCR_IMAGE=ghcr.io/$OWNER/${{ github.event.repository.name }}
+        REPO_NAME_LOWERCASE=$(echo "${{ github.event.repository.name }}" | tr '[:upper:]' '[:lower:]')
+        GHCR_IMAGE=ghcr.io/$OWNER/$REPO_NAME_LOWERCASE
 
         docker rmi -f $(docker images -q $IMAGE_NAME*) 2>/dev/null || true
         docker rmi -f $(docker images -q $GHCR_IMAGE*) 2>/dev/null || true
