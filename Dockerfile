@@ -1,21 +1,19 @@
-FROM golang:1.24 AS builder
+FROM golang:1.24-alpine AS builder
 
-WORKDIR /app
+WORKDIR /build
 
-COPY go.mod ./
+COPY main.go .
 
-COPY . .  
-
-RUN go mod download || true
-
-RUN CGO_ENABLED=0 GOOS=linux go build -o myapp .
+RUN CGO_ENABLED=0 go build -ldflags="-w -s" -o /app/hunyuan main.go
 
 FROM alpine:latest
 
 WORKDIR /app
 
-COPY --from=builder /app/myapp .
+COPY --from=builder /app/hunyuan /app/hunyuan
+
+RUN chmod +x /app/hunyuan
 
 EXPOSE 6666
 
-CMD ["./myapp", "--address", "0.0.0.0"]
+CMD ["/app/hunyuan", "--address", "0.0.0.0", "--port", "6666", "--verify-ssl=false", "--dev", "--workers", "400", "--queue-size", "1000", "--max-concurrent", "400"]
