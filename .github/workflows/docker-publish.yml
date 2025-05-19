@@ -16,7 +16,7 @@ jobs:
         fetch-depth: 0  
       name: 检出代码并获取完整历史记录
 
-    - name: 列出当前目录文件以调试
+    - name: 列出当前目录文件以调试 (检出后)
       run: |
         ls -la
         find . -name "go.mod" -type f
@@ -26,29 +26,30 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: '1.22'
-        cache: true 
+        cache: true  
         cache-dependency-path: 'go.sum'  
 
-    - name: 检查并初始化Go模块
+    - name: 强制初始化Go模块并生成go.sum
       run: |
-        if [ -f "go.mod" ]; then
-          echo "GO_MODULE_EXISTS=true" >> $GITHUB_ENV
-        else
-          echo "go.mod file not found, initializing a new Go module..."
-          MODULE_NAME="github.com/${{ github.repository }}"
+        echo "Ensuring go.mod and go.sum files exist..."
+        MODULE_NAME="github.com/${{ github.repository }}"
+        # 如果go.mod不存在，初始化模块
+        if [ ! -f "go.mod" ]; then
           go mod init "$MODULE_NAME"
-          echo "GO_MODULE_EXISTS=true" >> $GITHUB_ENV
+          echo "go.mod initialized."
+        else
+          echo "go.mod already exists."
         fi
+        go mod tidy || echo "Warning: go mod tidy failed or no dependencies, continuing build..."
+        ls -la  
 
-    - name: 生成go.sum文件（如果有依赖）
-      if: env.GO_MODULE_EXISTS == 'true'
+    - name: 列出当前目录文件以调试 (go mod后)
       run: |
-        # 运行go mod tidy以生成go.sum文件（如果项目有依赖项）
-        go mod tidy || echo "Warning: go mod tidy failed, continuing build..."
-        ls -la  # 调试：查看是否生成了go.sum
+        ls -la
+        find . -name "go.mod" -type f
+        find . -name "go.sum" -type f # 额外检查go.sum
 
     - name: 运行Go测试
-      if: env.GO_MODULE_EXISTS == 'true'
       run: |
         go test ./... -v || echo "Warning: Go tests failed or no test files found, continuing build..."
 
@@ -108,5 +109,6 @@ jobs:
       if: always()
       run: |
         docker rmi -f $(docker images -q my-image-name*) 2>/dev/null || true
+        # 使用shell命令将repository_owner转为小写以匹配镜像名称
         OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
         docker rmi -f $(docker images -q ghcr.io/$OWNER/my-image-name*) 2>/dev/null || true
