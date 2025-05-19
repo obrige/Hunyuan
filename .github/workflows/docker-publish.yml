@@ -13,14 +13,15 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-options: '--depth=0'
+        fetch-depth: 0  
       name: 检出代码并获取完整历史记录
 
     - name: 设置Go环境
       uses: actions/setup-go@v5
       with:
         go-version: '1.22'
-        cache: true
+        cache: true  
+        cache-dependency-path: '**/go.sum'  
 
     - name: 运行Go测试
       run: |
