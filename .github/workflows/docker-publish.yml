@@ -58,7 +58,9 @@ jobs:
     - name: 推送Docker镜像到GitHub Container Registry
       if: github.event_name == 'push'
       run: |
-        GHCR_IMAGE=ghcr.io/${{ github.repository_owner | lower }}/my-image-name
+        # 使用shell命令将repository_owner转为小写
+        OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+        GHCR_IMAGE=ghcr.io/$OWNER/my-image-name
         TIMESTAMP=$(date +%s)
         docker tag my-image-name:${{ github.sha }} $GHCR_IMAGE:${{ github.sha }}
         docker tag my-image-name:$TIMESTAMP $GHCR_IMAGE:$TIMESTAMP
@@ -73,4 +75,6 @@ jobs:
       if: always()
       run: |
         docker rmi -f $(docker images -q my-image-name*) 2>/dev/null || true
-        docker rmi -f $(docker images -q ghcr.io/${{ github.repository_owner | lower }}/my-image-name*) 2>/dev/null || true
+        # 使用shell命令将repository_owner转为小写以匹配镜像名称
+        OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+        docker rmi -f $(docker images -q ghcr.io/$OWNER/my-image-name*) 2>/dev/null || true
