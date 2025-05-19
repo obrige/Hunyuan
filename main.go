@@ -195,7 +195,7 @@ const (
 func parseFlags() *Config {
 	cfg := &Config{}
 	flag.StringVar(&cfg.Port, "port", "6666", "Port to listen on")
-	flag.StringVar(&cfg.Address, "address", "localhost", "Address to listen on")
+	flag.StringVar(&cfg.Address, "address", "0.0.0.0", "Address to listen on")
 	flag.StringVar(&cfg.LogLevel, "log-level", LogLevelInfo, "Log level (debug, info, warn, error)")
 	flag.BoolVar(&cfg.DevMode, "dev", false, "Enable development mode with enhanced logging")
 	flag.IntVar(&cfg.MaxRetries, "max-retries", 3, "Maximum number of retries for failed requests")
