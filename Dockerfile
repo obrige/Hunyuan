@@ -18,4 +18,4 @@ COPY --from=builder /app/myapp .
 
 EXPOSE 6666
 
-CMD ["./myapp"]
+CMD ["./myapp", "--address", "0.0.0.0"]
