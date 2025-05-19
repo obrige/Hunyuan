@@ -84,7 +84,7 @@ jobs:
       run: |
         TIMESTAMP=$(date +%s)
         DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
-        IMAGE_NAME="$DOCKERHUB_USERNAME/${{ github.repository }}"
+        IMAGE_NAME="${{ github.repository }}"
         docker build . --file Dockerfile --tag $IMAGE_NAME:$TIMESTAMP --tag $IMAGE_NAME:${{ github.sha }}
 
     - name: 推送Docker镜像到Docker Hub
